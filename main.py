@@ -2,12 +2,15 @@
 
 import time
 import datetime
+from openpyxl import Workbook
 
 import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from operator import index
+from io import BytesIO
 # from fbprophet import Prophet
 # from fbprophet.plot import plot_plotly
 
@@ -20,7 +23,6 @@ def date(y, m, d):
 
 inicio = date(2000, 1, 1)
 hoy = int(time.mktime(datetime.datetime.now().timetuple()))
-interval = '1mo' # 1d, 1wk
 
 # Dashboard
 
@@ -28,8 +30,21 @@ st.title('App de pronósticos')
 
 ticker = st.text_input('Introduzca el "ticker" del activo que desea analizar')
 
+interval = st.selectbox('Escoja un intervalo de tiempo', ['1d', '1wk', '1mo'])
+
 n_years = st.slider('Años de pronóstico:', 1, 4)
-periodo = n_years * 365
+
+if interval == '1d':
+
+    periodo = n_years * 365
+
+elif interval == '1wk':
+
+    periodo = n_years * 52
+
+else:
+
+    periodo = n_years * 12
 
 # Query
 
@@ -49,6 +64,28 @@ loadstate_datos.text('Cargando datos... listo!!')
 st.subheader('Datos crudos')
 st.write(data.tail())
 
+# Descarga de datos
+
+@st.cache
+def xls_df(df):
+
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine="xlsxwriter")
+    df.to_excel(writer, sheet_name='Sheet1', index=False)
+    workbook = writer.book
+    worksheet = writer.sheets['Sheet1']
+    format1 = workbook.add_format({'num_format': '0.00'})
+    worksheet.set_column('A:A', None, format1)
+    writer.save()
+    processed_data = output.getvalue()
+    return processed_data
+
+xlsx = xls_df(data)
+
+st.download_button(label='Descarga los datos en formato Excel',
+                   data=xlsx,
+                   file_name=f'historical_prices_{ticker}.xlsx')
+
 # Candelas
 
 def candle():
@@ -62,14 +99,6 @@ def candle():
     st.plotly_chart(fig)
 
 candle()
-
-# Descarga de datos
-
-def save(df):
-
-    df.to_excel(f'historical_prices_{ticker}.xlsx', sheet_name=ticker, index=False)
-
-st.download_button(label='Descarga los datos', data=save(data))
 
 # Prophet
 
